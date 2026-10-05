@@ -70,6 +70,17 @@ Figma 接入有三条技术路径，能力范围差异较大，**动手前应先
 1. 将目录整体复制到 `~/.workbuddy/skills/`
 2. 刷新后，技能会按 `description` 描述的适用场景自动加载
 
+## Third-party notices
+
+本仓库不包含任何第三方源代码。文中的部署流程会引导你安装以下项目，它们各自遵循自己的许可证：
+
+- [TalkToFigma](https://github.com/grab/cursor-talk-to-figma-mcp) —— MIT
+- [figma-developer-mcp (Framelink)](https://github.com/GLips/Figma-Context-MCP) —— MIT
+
+若需在自己的项目中再分发上述组件，请保留其版权声明与许可证原文。
+
+本项目与 Figma, Inc. 无隶属或背书关系。Figma 是 Figma, Inc. 的商标。
+
 ## License
 
 [MIT](LICENSE)

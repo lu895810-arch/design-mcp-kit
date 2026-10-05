@@ -204,6 +204,10 @@ function generateChannelName() {
 
 改完要在 Figma 里 `Manage plugins in development` 移除旧条目 → 重新 Import → 重开面板。
 
+> **再分发提醒**：上游是 MIT 许可，修改与再分发均在授权范围内，但如果你把自己改过的插件
+> 发布出去，需要保留上游的版权声明与许可证 —— `LICENSE` 文件不要删，`manifest.json` 里
+> 指向原仓库的链接也保持不动（第 9 节「不能动」清单里已列）。
+
 ## 10. 报文协议（写探针、排查时必备）
 
 `src/socket.ts` 是个纯转发器，协议很简单：
