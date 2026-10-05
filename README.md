@@ -9,6 +9,7 @@
 | 技能 | 适用场景 | 主要内容 |
 |---|---|---|
 | [`cyx-mcp-figma`](cyx-mcp-figma/) | 接入 Figma；读取设计稿或在画布上直接绘制；排查桥连接故障 | 三条技术路径的选择依据、桥的常驻方案与自检脚本 |
+| [`cyx-mcp-modao`](cyx-mcp-modao/) | 接入墨刀；从一句需求生成原型 / PRD / 配图，并把生成的 HTML 导成可编辑原型 | Streamable HTTP 配置写法、凭据探针脚本、13 个工具的取舍、重启才生效的坑 |
 | [`mcp-install-cn`](mcp-install-cn/) | 在网络受限环境下接入第三方 MCP server | 解决包源不可达、代理拦截本地连接等问题 |
 | [`connect-figma-mcp`](connect-figma-mcp/) | 同上，早期实现 | 暂时保留，新场景建议优先使用 `cyx-mcp-figma` |
 
@@ -17,10 +18,11 @@
 ```bash
 git clone https://github.com/lu895810-arch/design-mcp-kit.git
 cp -r design-mcp-kit/cyx-mcp-figma ~/.workbuddy/skills/
+cp -r design-mcp-kit/cyx-mcp-modao ~/.workbuddy/skills/
 cp -r design-mcp-kit/mcp-install-cn ~/.workbuddy/skills/
 ```
 
-复制后刷新即可生效，无需额外安装步骤。带脚本的技能（如 `cyx-mcp-figma/scripts/`）请保持目录结构一并复制。
+复制后刷新即可生效，无需额外安装步骤。带脚本的技能（如 `cyx-mcp-figma/scripts/`、`cyx-mcp-modao/scripts/`）请保持目录结构一并复制。
 
 ## 技能详情
 
@@ -44,6 +46,32 @@ Figma 接入有三条技术路径，能力范围差异较大，**动手前应先
 - `scripts/probe_bridge.mjs`：不经客户端、直连桥的端到端自检脚本，无需重开会话加载 MCP 工具即可验证链路
 - 三个高频阻碍：必须使用桌面端（网页版不支持）、必须先打开设计文件、插件包位于隐藏目录导致选不到 manifest
 
+### cyx-mcp-modao —— 把墨刀接入 WorkBuddy
+
+墨刀和别的工具不一样：**官方直接给了 Streamable HTTP 型 MCP** —— 不用 npx、不用装包、不走 OAuth、不用桥接插件。配置里只写两个字段：
+
+```json
+{
+  "mcpServers": {
+    "modao": {
+      "url": "https://modao.cc/agent-py/ai/mcp",
+      "headers": { "modao-token": "modao_xxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+代价是**不热加载**：改完 `mcp.json` 必须 **⌘Q 完全退出 WorkBuddy 再重开**，新条目才会出现在「连接器 → MCP 服务管理 → 我的 MCP」里。这是本仓库里唯一一个「配置全对但就是不生效」的坑 —— 列表里看不到，不代表配置写错了。
+
+技能包含以下内容：
+
+- 官方参数表：服务地址、`modao-token` 请求头、令牌获取路径（头像菜单 → 令牌设置）、个人空间归属；服务端无状态，不需要维护会话
+- **为什么不能只看 `tools/list` 就认为配好了** —— 握手层不校验鉴权，令牌错了照样返回 `200`；必须调用业务工具 `get_account_status` 拿到 `success: true` 才算验过
+- `scripts/verify_modao_mcp.sh`：一条命令跑完 握手 → 列工具 → 查账号状态，只读、不消耗积分，也可用 `MODAO_TOKEN=...` 直接测一个令牌
+- 13 个工具的取用决策表（生成 / 续改 / 查状态 / 暂停 / 导入原型），以及服务端写在工具描述里的三条强约束：**有旧任务就不许新建、工具报错不许自动重试、`generate_*` 是付费操作必须用户明确同意**
+- 能力边界：`import_to_proto` 只吃 HTML（不支持 React / Vue / 外链）、下载链接只能在已登录墨刀的浏览器里打开、生成类工具最多等 100 秒，超时后用 `get_task_result` 轮询
+- 与 Figma 的分工：Figma 读和改既有设计稿，墨刀从零生成原型与 PRD
+
 ### mcp-install-cn —— 网络受限环境下的 MCP 接入
 
 本技能针对下列网络特征，环境相同可直接沿用：
@@ -56,6 +84,8 @@ Figma 接入有三条技术路径，能力范围差异较大，**动手前应先
 | macOS 缺少 `timeout` 命令 | 探针误判为「server 无输出」 | 用 `{ printf ...; sleep N; } \| server` 保活 stdin |
 
 核心结论：**`command: "npx"` 形式的配置在此类网络环境下无法运行**，必须改为「本地安装 + 绝对路径调用」。
+
+该技能也覆盖了远程型 MCP 的两条路：**自定义 Header 型**（只写 `url` + `headers`，本仓库的墨刀即属此类）与 **OAuth 型**（须先确认客户端在服务方白名单内）。
 
 > 文中出现的 `127.0.0.1:7890`、`npmmirror` 属于作者本机环境，迁移到其他环境时请按实际情况替换。
 
@@ -70,6 +100,8 @@ Figma 接入有三条技术路径，能力范围差异较大，**动手前应先
 1. 将目录整体复制到 `~/.workbuddy/skills/`
 2. 刷新后，技能会按 `description` 描述的适用场景自动加载
 
+> 配置类技能（`cyx-mcp-figma` / `cyx-mcp-modao`）除了复制技能目录，还需要把凭据写入 `~/.workbuddy/mcp.json`；改完该文件后 **⌘Q 完全退出 WorkBuddy 再重开**，新连接器才会出现在「MCP 服务管理」列表里。
+
 ## Third-party notices
 
 本仓库不包含任何第三方源代码。文中的部署流程会引导你安装以下项目，它们各自遵循自己的许可证：
@@ -79,7 +111,7 @@ Figma 接入有三条技术路径，能力范围差异较大，**动手前应先
 
 若需在自己的项目中再分发上述组件，请保留其版权声明与许可证原文。
 
-本项目与 Figma, Inc. 无隶属或背书关系。Figma 是 Figma, Inc. 的商标。
+本项目与 Figma, Inc.、墨刀（modao.cc）均无隶属或背书关系。Figma 是 Figma, Inc. 的商标；墨刀是墨刀团队的商标。
 
 ## License
 
