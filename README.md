@@ -1,6 +1,6 @@
 # design-mcp-kit
 
-把设计工具接入 AI 编程助手的技能集。
+把设计工具与云端开发环境接入 AI 编程助手的技能集。
 
 每个目录是一个独立的技能包，可直接复制到 `~/.workbuddy/skills/` 使用。内容来自实际接入过程的完整记录，包含验证方法、失败原因与对应处理，而非文档的转述。
 
@@ -10,6 +10,7 @@
 |---|---|---|
 | [`cyx-mcp-figma`](cyx-mcp-figma/) | 接入 Figma；读取设计稿或在画布上直接绘制；排查桥连接故障 | 三条技术路径的选择依据、桥的常驻方案与自检脚本 |
 | [`cyx-mcp-modao`](cyx-mcp-modao/) | 接入墨刀；从一句需求生成原型 / PRD / 配图，并把生成的 HTML 导成可编辑原型 | Streamable HTTP 配置写法、凭据探针脚本、13 个工具的取舍、重启才生效的坑 |
+| [`cyx-mcp-cloudstudio`](cyx-mcp-cloudstudio/) | 接入腾讯云 Cloud Studio；把本地项目传到云端工作空间里跑起来，并拿到可分享的预览链接 | stdio 型本地 MCP 的配置写法、JWT 令牌校验脚本、5 个工具的串联方式、两个必踩的坑 |
 | [`mcp-install-cn`](mcp-install-cn/) | 在网络受限环境下接入第三方 MCP server | 解决包源不可达、代理拦截本地连接等问题 |
 | [`connect-figma-mcp`](connect-figma-mcp/) | 同上，早期实现 | 暂时保留，新场景建议优先使用 `cyx-mcp-figma` |
 
@@ -19,10 +20,11 @@
 git clone https://github.com/lu895810-arch/design-mcp-kit.git
 cp -r design-mcp-kit/cyx-mcp-figma ~/.workbuddy/skills/
 cp -r design-mcp-kit/cyx-mcp-modao ~/.workbuddy/skills/
+cp -r design-mcp-kit/cyx-mcp-cloudstudio ~/.workbuddy/skills/
 cp -r design-mcp-kit/mcp-install-cn ~/.workbuddy/skills/
 ```
 
-复制后刷新即可生效，无需额外安装步骤。带脚本的技能（如 `cyx-mcp-figma/scripts/`、`cyx-mcp-modao/scripts/`）请保持目录结构一并复制。
+复制后刷新即可生效，无需额外安装步骤。带脚本的技能（如 `cyx-mcp-figma/scripts/`、`cyx-mcp-modao/scripts/`、`cyx-mcp-cloudstudio/scripts/`）请保持目录结构一并复制。
 
 ## 技能详情
 
@@ -72,6 +74,22 @@ Figma 接入有三条技术路径，能力范围差异较大，**动手前应先
 - 能力边界：`import_to_proto` 只吃 HTML（不支持 React / Vue / 外链）、下载链接只能在已登录墨刀的浏览器里打开、生成类工具最多等 100 秒，超时后用 `get_task_result` 轮询
 - 与 Figma 的分工：Figma 读和改既有设计稿，墨刀从零生成原型与 PRD
 
+### cyx-mcp-cloudstudio —— 把 Cloud Studio 接入 WorkBuddy
+
+Cloud Studio 是腾讯云的云端 IDE。它和上面两个都不一样：**官方给的是 stdio 型本地 MCP**，发布在 PyPI 上（`cloudstudio-mcp-server`，可执行文件为 `cloudstudio-mcp-deploy`），需要装在本地、由客户端拉起进程。接上之后可以把本地项目传到云端工作空间、在里面跑 `npm install` 并启动服务，再拿到形如 `https://{space_key}--{port}.{region}.cloudstudio.club` 的预览链接。
+
+另需澄清一点：**WorkBuddy 的连接器市场里没有 Cloud Studio**（搜到的「腾讯云 CloudBase」是云开发后端，不是云 IDE），所以这条路只能走自定义本地 MCP，配置完还要在连接器管理页手动「信任」。
+
+技能包含以下内容：
+
+- 为什么不用官方推荐的 `uvx`，改走 `~/.workbuddy/mcp-servers/<name>/venv` 独立虚拟环境：不污染全局解释器，也避开每次启动的拉包检查
+- `scripts/verify_cloudstudio_mcp.py`：一条命令跑完「解 JWT 有效期 → 打鉴权端点 → stdio 握手 → 列工具」，只读，不创建任何云端资源
+- 两个必踩的坑：**`initialize` / `tools/list` 不校验鉴权**（令牌错了照样返回，所以「握手成功」不等于「配好了」）；**`FASTMCP_CHECK_FOR_UPDATES` 只接受 `stable` / `prerelease` / `off`**，写 `"0"` 会让服务在 import 期直接崩溃，表现为「完全起不来、列表里看不到它」
+- 5 个工具（建工作空间 / 传文件 / 执行命令 / 生成分享链接 / 查运行日志）的串联顺序与各自约束
+- 一处源码里的暗改：`region` 传 `ap-shanghai` 会被静默改写成 `ap-shanghai2`，排查域名解析问题时先想到它
+
+> `create_workspace` 会创建**真实的云端资源**并占用每月赠送时长。验链路不要拿它试，用只读的鉴权接口。
+
 ### mcp-install-cn —— 网络受限环境下的 MCP 接入
 
 本技能针对下列网络特征，环境相同可直接沿用：
@@ -100,7 +118,7 @@ Figma 接入有三条技术路径，能力范围差异较大，**动手前应先
 1. 将目录整体复制到 `~/.workbuddy/skills/`
 2. 刷新后，技能会按 `description` 描述的适用场景自动加载
 
-> 配置类技能（`cyx-mcp-figma` / `cyx-mcp-modao`）除了复制技能目录，还需要把凭据写入 `~/.workbuddy/mcp.json`；改完该文件后 **⌘Q 完全退出 WorkBuddy 再重开**，新连接器才会出现在「MCP 服务管理」列表里。
+> 配置类技能（`cyx-mcp-figma` / `cyx-mcp-modao` / `cyx-mcp-cloudstudio`）除了复制技能目录，还需要把凭据写入 `~/.workbuddy/mcp.json`；改完该文件后 **⌘Q 完全退出 WorkBuddy 再重开**，新连接器才会出现在「MCP 服务管理」列表里。其中 `cyx-mcp-cloudstudio` 还需先把 Python 包装进独立虚拟环境（见该技能 `SKILL.md` 第二节）。
 
 ## Third-party notices
 
@@ -108,10 +126,11 @@ Figma 接入有三条技术路径，能力范围差异较大，**动手前应先
 
 - [TalkToFigma](https://github.com/grab/cursor-talk-to-figma-mcp) —— MIT
 - [figma-developer-mcp (Framelink)](https://github.com/GLips/Figma-Context-MCP) —— MIT
+- [cloudstudio-mcp-server](https://pypi.org/project/cloudstudio-mcp-server/) —— MIT（由腾讯云 Cloud Studio 团队发布）
 
 若需在自己的项目中再分发上述组件，请保留其版权声明与许可证原文。
 
-本项目与 Figma, Inc.、墨刀（modao.cc）均无隶属或背书关系。Figma 是 Figma, Inc. 的商标；墨刀是墨刀团队的商标。
+本项目与 Figma, Inc.、墨刀（modao.cc）、腾讯云均无隶属或背书关系。Figma 是 Figma, Inc. 的商标；墨刀是墨刀团队的商标；Cloud Studio 是腾讯云的商标。
 
 ## License
 
